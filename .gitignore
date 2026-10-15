@@ -1,0 +1,18 @@
+# Secrets — never commit
+cdp_api_key.json
+.env
+*.pem
+*.key
+
+# Logs
+apex.log
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
