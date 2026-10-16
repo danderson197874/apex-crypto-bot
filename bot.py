@@ -279,8 +279,9 @@ class MarketIntel:
             if r.status_code == 200:
                 up = r.json().get('sentiment_votes_up_percentage')
                 if up is not None:
-                    # 50% up = neutral -> 0 ; 100% up -> +1 ; 0% up -> -1
-                    score = max(-1.0, min(1.0, (float(up) - 50.0) / 50.0))
+                    # Contrarian: high up-votes signal euphoria (sell), low up-votes signal fear (buy)
+                    # Evidence: live accuracy 19.2% (307 trades) — far below 50% chance, direction inverted
+                    score = max(-1.0, min(1.0, (50.0 - float(up)) / 50.0))
             elif r.status_code == 429:
                 log.warning(f"  [INTEL] CoinGecko social {symbol} rate-limited")
         except Exception as e:
