@@ -1061,7 +1061,8 @@ class ApexEngine:
                 amt = pv * POSITION_SIZE_PCT[cfg['tier']]
                 if DRY_RUN:
                     amt = max(amt, MIN_TRADE_USDC)  # paper money: let small-tier coins trade too
-                if fused > ENTRY_THRESHOLD and s1 > 0:
+                # Fix: removed 's1 > 0' hard gate — momentum is ~50% accurate and blocked ~48% of valid fused signals
+                if fused > ENTRY_THRESHOLD:
                     if amt < MIN_TRADE_USDC:
                         reason = f"WAIT (signal {fused:.2f} but size ${amt:.2f} < ${MIN_TRADE_USDC:.0f} min)"
                     elif cfg['tp_pct'] / cfg['stop_pct'] < MIN_RISK_REWARD:
