@@ -174,13 +174,15 @@ DESIRED_COINS = {
 }
 
 # Arbitrage pairs
-ARBI_PAIRS = [('XRP','XLM'), ('DOGE','SHIB'), ('HBAR','XLM'), ('MATIC','CRO')]
+# Removed ('MATIC','CRO'): different ecosystems (L2 vs exchange token), ratio drifts not mean-reverts
+ARBI_PAIRS = [('XRP','XLM'), ('DOGE','SHIB'), ('HBAR','XLM')]
 
 # CoinGecko id map for on-chain / market-data enrichment (best-effort; unmapped coins degrade to neutral)
+# Fixed MATIC: rebranded to POL, new slug is polygon-ecosystem-token; added FORT→forta, FREYSA→freysa-ai
 COINGECKO_IDS = {
-    'XRP': 'ripple', 'DOGE': 'dogecoin', 'SHIB': 'shiba-inu', 'MATIC': 'matic-network',
+    'XRP': 'ripple', 'DOGE': 'dogecoin', 'SHIB': 'shiba-inu', 'MATIC': 'polygon-ecosystem-token',
     'CRO': 'crypto-com-chain', 'HBAR': 'hedera-hashgraph', 'XLM': 'stellar', 'KAVA': 'kava',
-    'XYO': 'xyo-network', 'VARA': 'vara-network',
+    'XYO': 'xyo-network', 'VARA': 'vara-network', 'FORT': 'forta', 'FREYSA': 'freysa-ai',
 }
 
 HTTP_UA = 'APEX-Strategist/2.0 (+https://apex-crypto.abacusai.app)'
