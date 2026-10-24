@@ -331,9 +331,11 @@ class MarketIntel:
             cg = self.cg.get(symbol, {})
             d1, d7 = cg.get('d1', 0.0), cg.get('d7', 0.0)
             cg_mom = max(-1.0, min(1.0, (d1 / 10.0 + d7 / 20.0) / 2.0))
-            vol = cg.get('vol_score', 0.0)
-            score = 0.55 * book + 0.30 * cg_mom + 0.15 * vol
-            return max(-1.0, min(1.0, score)), f'book={book:+.2f} cg={cg_mom:+.2f}'
+            # FIX: vol_score is non-directional (spikes on sell-offs too) → removed; cg_mom negated
+            # because small-cap alts are mean-reverting (recent gain→overbought→SELL, not BUY).
+            # Formula: 0.55*book+0.30*cg_mom+0.15*vol → 0.65*book+0.35*(-cg_mom) (PR #4)
+            score = 0.65 * book + 0.35 * (-cg_mom)
+            return max(-1.0, min(1.0, score)), f'book={book:+.2f} cg={-cg_mom:+.2f}'
         except Exception:
             return 0.0, 'orderflow_err'
 
