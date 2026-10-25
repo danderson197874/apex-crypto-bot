@@ -736,10 +736,11 @@ class ApexEngine:
                 if std_r < 1e-9:
                     continue
                 z = (ratio[-1] - mean_r) / std_r
+                # Fix: ratio=log(my/partner); z>2 → my is EXPENSIVE (SELL -0.7); z<-2 → my is CHEAP (BUY +0.7)
                 if z > 2.0:
-                    scores.append(0.7)  # coin is cheap relative to partner
+                    scores.append(-0.7)  # coin is expensive relative to partner → SELL signal
                 elif z < -2.0:
-                    scores.append(-0.7)  # coin is expensive
+                    scores.append(0.7)   # coin is cheap relative to partner → BUY signal
                 else:
                     scores.append(0.0)
             except Exception:
