@@ -135,7 +135,9 @@ TARGET_SCALE        = 0.5 if DRY_RUN else 1.0        # paper: half-size stop/tar
 MAX_HOLD_HOURS      = 6 if DRY_RUN else 72           # close stale positions and learn from the result
 MIN_HOLD_HOURS      = 1.0                            # signal exits wait this long (avoids 15-min noise flips)
 ML_LABEL_HOURS      = 6                              # ML predicts: up >= ML_LABEL_GAIN within 6h?
-ML_LABEL_GAIN       = 0.015
+ML_LABEL_GAIN       = 0.015                          # fallback only; per-tier thresholds used in _train_ml
+# Per-tier label gain: flat 1.5% creates 74% base rate for Tier-3 (tp=20%), inverting ML predictions
+ML_LABEL_GAIN_BY_TIER = {1: 0.04, 2: 0.06, 3: 0.10}
 ML_RETRAIN_HOURS    = 6
 ML_HISTORY_HOURS    = 1500                           # ~2 months of hourly candles for training (paged)
 WEIGHT_MIN, WEIGHT_MAX, WEIGHT_LR = 0.05, 0.40, 0.05  # meta-learner guard rails
@@ -700,13 +702,21 @@ class ApexEngine:
                 add(0.25, 'breakout')
             reason = '+'.join(parts) or 'neutral'
 
-        # 3) Bonuses
+        # 3) Bonuses — symmetric: every bullish bonus has a bearish counterpart to avoid entry bias
         if histogram.iloc[-1] > 0 and histogram.iloc[-2] <= 0:
             score += 0.1
             reason += '+macd_turn'
+        elif histogram.iloc[-1] < 0 and histogram.iloc[-2] >= 0:
+            # Bearish counterpart: MACD histogram crosses below zero
+            score -= 0.1
+            reason += '-macd_turn'
         if close.iloc[-1] <= bb_lower.iloc[-1] * 1.01 and rsi_now > rsi_prev:
             score += 0.1
             reason += '+bb_lower'
+        elif close.iloc[-1] >= bb_upper.iloc[-1] * 0.99 and rsi_now < rsi_prev:
+            # Bearish counterpart: price at upper BB and RSI falling (overbought)
+            score -= 0.1
+            reason += '-bb_upper'
 
         return max(-1.0, min(1.0, score)), reason
 
@@ -808,7 +818,10 @@ class ApexEngine:
         X = self._ml_frame(df)
         close = df['close']
         fut = pd.concat([close.shift(-k) for k in range(1, ML_LABEL_HOURS + 1)], axis=1).max(axis=1)
-        y = (fut >= close * (1 + ML_LABEL_GAIN)).astype(int)
+        # Use per-tier gain threshold: flat 1.5% creates ~74% base rate for Tier-3 (tp=20%)
+        tier = DESIRED_COINS.get(symbol, {}).get('tier', 1)
+        gain = ML_LABEL_GAIN_BY_TIER.get(tier, ML_LABEL_GAIN)
+        y = (fut >= close * (1 + gain)).astype(int)
         valid = X.notna().all(axis=1) & close.shift(-ML_LABEL_HOURS).notna()
         valid.iloc[:50] = False
         Xv, yv = X[valid].values, y[valid].values
