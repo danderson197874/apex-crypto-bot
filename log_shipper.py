@@ -22,6 +22,11 @@ BATCH = 30  # seconds between sends
 def tail(path, pos=0):
     try:
         with open(path, 'r') as f:
+            # Fix: detect log rotation (file truncated/replaced) — if file is smaller than last
+            # known pos, seek resets to 0 so no newly-written lines are silently skipped.
+            f.seek(0, 2)  # seek to end to get current file size
+            if f.tell() < pos:
+                pos = 0   # log was rotated; restart from beginning
             f.seek(pos)
             lines = f.readlines()
             return lines, f.tell()
