@@ -31,17 +31,23 @@ def tail(path, pos=0):
 def ship(lines):
     if not lines:
         return
-    try:
-        r = requests.post(URL, json={"lines": lines},
-                         headers={"Authorization": f"Bearer {TOKEN}"},
-                         timeout=15)
-        if r.status_code == 200:
-            data = r.json()
-            print(f"Shipped {len(lines)} lines, inserted {data.get('inserted',0)}")
-        else:
-            print(f"Ship error: {r.status_code}")
-    except Exception as e:
-        print(f"Ship error: {e}")
+    # Retry up to 3 times with exponential backoff to prevent silent batch loss on transient errors
+    for attempt in range(3):
+        try:
+            r = requests.post(URL, json={"lines": lines},
+                             headers={"Authorization": f"Bearer {TOKEN}"},
+                             timeout=15)
+            if r.status_code == 200:
+                data = r.json()
+                print(f"Shipped {len(lines)} lines, inserted {data.get('inserted',0)}")
+                return
+            else:
+                print(f"Ship error: {r.status_code} (attempt {attempt+1}/3)")
+        except Exception as e:
+            print(f"Ship error: {e} (attempt {attempt+1}/3)")
+        if attempt < 2:
+            time.sleep(2 ** attempt)  # 1s, 2s backoff
+    print(f"Ship failed after 3 attempts — {len(lines)} lines dropped")
 
 if __name__ == '__main__':
     print("APEX Log Shipper starting...")
