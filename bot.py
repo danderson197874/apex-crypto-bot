@@ -673,6 +673,8 @@ class ApexEngine:
 
         # 2) Graded evidence: partial credit for each bullish / bearish sign,
         #    so the layer produces a usable signal instead of 0 most of the time.
+        #    Fixed: made all signal contributions symmetric (equal magnitude ±) to remove
+        #    the ~+0.075 systematic bullish bias from mismatched weights and missing bearish signals.
         if score == 0.0:
             parts = []
             def add(v, tag):
@@ -682,22 +684,28 @@ class ApexEngine:
             if e9.iloc[-1] > e21.iloc[-1]:
                 add(0.15, 'ema9>21')
             else:
-                add(-0.10, 'ema9<21')
+                add(-0.15, 'ema9<21')           # was -0.10; matched to bullish +0.15 for symmetry
             add(0.10 if above50 else -0.10, 'above_ema50' if above50 else 'below_ema50')
             if rsi_now < 40 and rsi_now > rsi_prev:
                 add(0.20, 'rsi_low_rising')
             elif rsi_now > 60 and rsi_now < rsi_prev:
-                add(-0.15, 'rsi_high_falling')
+                add(-0.20, 'rsi_high_falling')  # was -0.15; matched to bullish +0.20 for symmetry
             if histogram.iloc[-1] > histogram.iloc[-2]:
                 add(0.10, 'macd_rising')
             else:
-                add(-0.05, 'macd_falling')
+                add(-0.10, 'macd_falling')      # was -0.05; matched to bullish +0.10 for symmetry
             if close.iloc[-1] > df['open'].iloc[-1]:
                 add(0.05, 'green')
+            else:
+                add(-0.05, 'red')               # was missing; bearish counterpart to +0.05 green
             if vol:
                 add(0.10 if close.iloc[-1] > df['open'].iloc[-1] else -0.10, 'volume')
+            # Breakdown: bearish counterpart to bullish breakout (+0.25); was missing entirely
+            breakdown = close.iloc[-1] < df['low'].iloc[-20:-1].min() * 0.98
             if mom:
                 add(0.25, 'breakout')
+            elif breakdown:
+                add(-0.25, 'breakdown')
             reason = '+'.join(parts) or 'neutral'
 
         # 3) Bonuses
