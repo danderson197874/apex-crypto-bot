@@ -340,10 +340,14 @@ class MarketIntel:
 
 # ── META-LEARNER ──
 class MetaLearner:
+    # Weights survive bot restarts by persisting to disk (same pattern as positions.json)
+    WEIGHTS_FILE = os.path.expanduser('~/trading-agent/meta_weights.json')
+
     def __init__(self, dashboard_url, ingest_token):
         self.weights = {'momentum': 0.28, 'arbitrage': 0.15, 'ml': 0.24,
                         'sentiment': 0.16, 'orderflow': 0.17}
-        self._fetch_weights(dashboard_url)
+        self._fetch_weights(dashboard_url)  # load API / dashboard weights baseline
+        self._load_local_weights()           # overlay with persisted in-session learning if fresh
 
     def _fetch_weights(self, url):
         if not url:
@@ -359,6 +363,31 @@ class MetaLearner:
                 log.info(f"  Weights loaded: {self.weights}")
         except Exception as e:
             log.warning(f"  Could not fetch weights: {e} — using defaults")
+
+    def _load_local_weights(self):
+        """Restore last-session's learned weights if the local file is recent (within 24h).
+        This overlays API weights so in-session MetaLearner convergence survives bot restarts."""
+        try:
+            if not os.path.isfile(self.WEIGHTS_FILE):
+                return
+            if time.time() - os.path.getmtime(self.WEIGHTS_FILE) > 86400:
+                return  # file older than 24h — prefer fresh API weights
+            with open(self.WEIGHTS_FILE) as f:
+                saved = json.load(f)
+            if all(k in saved for k in LAYERS) and all(isinstance(saved[k], (int, float)) for k in LAYERS):
+                self.weights = clamp_weights({k: float(saved[k]) for k in LAYERS})
+                log.info(f"  Weights restored from local file: {self.weights}")
+        except Exception as e:
+            log.warning(f"  Could not load local weights: {e}")
+
+    def _save_local_weights(self):
+        """Persist in-memory MetaLearner weights so restarts don't lose within-session learning."""
+        try:
+            os.makedirs(os.path.dirname(self.WEIGHTS_FILE), exist_ok=True)
+            with open(self.WEIGHTS_FILE, 'w') as f:
+                json.dump(self.weights, f)
+        except Exception:
+            pass
 
     def fuse(self, scores):
         total = 0.0
@@ -384,6 +413,7 @@ class MetaLearner:
                     old_w = self.weights.get(layer, 0.2)
                     self.weights[layer] = old_w * (1 + WEIGHT_LR) if win else old_w * (1 - WEIGHT_LR)
             self.weights = clamp_weights(self.weights)
+            self._save_local_weights()  # persist learned weights so bot restarts don't lose convergence
         except Exception as e:
             log.warning(f"  Meta-learner update error: {e}")
 
