@@ -360,17 +360,28 @@ class MetaLearner:
         except Exception as e:
             log.warning(f"  Could not fetch weights: {e} — using defaults")
 
-    def fuse(self, scores):
+    def fuse(self, scores, abstain_layers=None):
+        # Renormalize over active layers only: abstaining layers (no data/model) are excluded
+        # from both sum and denominator so they don't dilute the fused score for other layers.
+        if abstain_layers is None:
+            abstain_layers = set()
         total = 0.0
+        active_weight = 0.0
         max_contrib = 0.0
         dominant = 'momentum'
         for layer, score in scores.items():
             w = self.weights.get(layer, 0.33)
+            if layer in abstain_layers:
+                continue  # excluded entirely — no opinion, not a neutral vote
+            active_weight += w
             contrib = w * score
             total += contrib
             if abs(contrib) > max_contrib:
                 max_contrib = abs(contrib)
                 dominant = layer
+        # Scale fused score so it remains in [-1, 1] range regardless of how many layers abstain
+        if 0 < active_weight < 1.0:
+            total = total / active_weight
         return total, dominant
 
     def record_outcome(self, symbol, entry_scores, outcome, return_pct, pnl_usdc, dashboard_url, token):
@@ -1046,7 +1057,14 @@ class ApexEngine:
 
                 scores = {'momentum': s1, 'arbitrage': s2, 'ml': s3,
                           'sentiment': s4, 'orderflow': s5}
-                fused, dominant = self.meta.fuse(scores)
+                # Distinguish abstaining layers (no data) from genuinely neutral votes (data says "no signal")
+                _ABSTAIN_REASONS = {'insufficient_data', 'no_arbi_pairs', 'sklearn_missing',
+                                    'model_not_trained', 'ml_features_nan', 'ml_error',
+                                    'sentiment_err', 'orderflow_err'}
+                abstain_layers = {lyr for lyr, rsn in [('momentum', r1), ('arbitrage', r2), ('ml', r3),
+                                                        ('sentiment', r4), ('orderflow', r5)]
+                                  if rsn in _ABSTAIN_REASONS}
+                fused, dominant = self.meta.fuse(scores, abstain_layers)
 
                 if symbol in self.positions:
                     self.check_position(df, symbol, cfg, price, fused)
