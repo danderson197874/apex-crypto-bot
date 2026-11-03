@@ -497,6 +497,20 @@ class ApexEngine:
                     self.positions = {s: p for s, p in data.get('positions', {}).items() if s in self.coins}
                     if self.positions:
                         log.info(f"  Restored {len(self.positions)} open positions: {', '.join(self.positions)}")
+                    # Restore circuit-breaker state so pauses/loss counts survive restarts.
+                    # Without this, a 24h drawdown pause or a 2-loss streak resets on every restart,
+                    # defeating the circuit breaker and allowing immediate re-entry into losing coins.
+                    self.losses = data.get('losses', {})
+                    now = datetime.utcnow()
+                    for sym, iso in data.get('paused', {}).items():
+                        try:
+                            until = datetime.fromisoformat(iso)
+                            if until > now:  # only restore pauses that haven't expired yet
+                                self.paused[sym] = until
+                        except Exception:
+                            pass
+                    if self.paused:
+                        log.info(f"  Restored {len(self.paused)} active pause(s): {', '.join(self.paused)}")
         except Exception as e:
             log.warning(f"  Could not restore positions: {e}")
 
@@ -505,7 +519,10 @@ class ApexEngine:
             os.makedirs(os.path.dirname(self.POSITIONS_FILE), exist_ok=True)
             tmp = self.POSITIONS_FILE + '.tmp'
             with open(tmp, 'w') as f:
-                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE', 'positions': self.positions}, f, default=float)
+                # Save circuit-breaker state alongside positions so it survives bot restarts.
+                paused_iso = {k: v.isoformat() for k, v in self.paused.items()}
+                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE', 'positions': self.positions,
+                           'losses': self.losses, 'paused': paused_iso}, f, default=float)
             os.replace(tmp, self.POSITIONS_FILE)
         except Exception as e:
             log.warning(f"  Could not save positions: {e}")
