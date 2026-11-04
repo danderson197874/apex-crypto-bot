@@ -638,6 +638,20 @@ class ApexEngine:
         vol_ok = df['volume'].iloc[-1] > avg_vol * 1.2
         return near_bot and rsi_ok and green and vol_ok
 
+    # Bearish mirror of at_bottom: price near 20-period high with RSI rolling over and distribution volume.
+    def at_top(self, df):
+        if df is None or len(df) < 20:
+            return False
+        price = df['close'].iloc[-1]
+        high20 = df['high'].iloc[-20:].max()
+        near_top = price >= high20 * 0.95     # within 5% of 20-period high
+        r = self.rsi(df['close'])
+        rsi_ok = r.iloc[-3] >= 65 and r.iloc[-1] < r.iloc[-2]  # was elevated, now falling
+        red = df['close'].iloc[-1] < df['open'].iloc[-1]        # red candle: sellers dominating
+        avg_vol = df['volume'].iloc[-20:-1].mean()
+        vol_ok = df['volume'].iloc[-1] > avg_vol * 1.2          # high-volume distribution
+        return near_top and rsi_ok and red and vol_ok
+
     # ── LAYER 1: Momentum/Trend ──
     def score_momentum(self, df, tier, symbol):
         if df is None or len(df) < 50:
@@ -658,10 +672,16 @@ class ApexEngine:
         above50 = close.iloc[-1] > e50.iloc[-1]
         rsi_now, rsi_prev = r.iloc[-1], r.iloc[-2]
         rsi_bounce = r.iloc[-3] <= 35 and rsi_now > rsi_prev
+        # Bearish mirror of rsi_bounce: RSI was elevated (>=65) and is now rolling over
+        rsi_rejection = r.iloc[-3] >= 65 and rsi_now < rsi_prev
         vol = df['volume'].iloc[-1] > df['volume'].iloc[-20:-1].mean() * 1.5
         mom = close.iloc[-1] > df['high'].iloc[-20:-1].max() * 1.02
+        # Bearish mirror of mom: price breaking below the 20-period low range
+        breakdown = close.iloc[-1] < df['low'].iloc[-20:-1].min() * 0.98
 
-        # 1) Full-confirmation setups (original strict patterns) score highest.
+        # 1) Full-confirmation setups — highest-confidence signals in both directions.
+        # Added bearish elif block (at_top) as symmetric counterpart to at_bottom;
+        # previously only bullish full-confirmation patterns existed, creating a +0.9 ceiling with no -0.9 floor.
         score, reason = 0.0, ''
         if self.at_bottom(df):
             if tier == 1 and golden and above50 and rsi_bounce:
@@ -670,6 +690,14 @@ class ApexEngine:
                 score, reason = 0.7, f"{'ema_cross' if golden else 'rsi_bounce'}+volume"
             elif tier == 3 and (mom or rsi_bounce):
                 score, reason = 0.6, 'momentum_breakout' if mom else 'rsi_bounce'
+        elif self.at_top(df):
+            # Bearish full-confirmation: near 20-period high, RSI rolling over, distribution volume.
+            if tier == 1 and not above50 and rsi_rejection:
+                score, reason = -0.9, 'at_top+below_ema50+rsi_rejection'
+            elif tier == 2 and (rsi_rejection or not above50) and vol:
+                score, reason = -0.7, f"at_top+{'rsi_rejection' if rsi_rejection else 'ema50_bear'}+volume"
+            elif tier == 3 and (breakdown or rsi_rejection):
+                score, reason = -0.6, 'breakdown' if breakdown else 'at_top+rsi_rejection'
 
         # 2) Graded evidence: partial credit for each bullish / bearish sign,
         #    so the layer produces a usable signal instead of 0 most of the time.
