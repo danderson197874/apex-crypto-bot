@@ -374,15 +374,20 @@ class MetaLearner:
         return total, dominant
 
     def record_outcome(self, symbol, entry_scores, outcome, return_pct, pnl_usdc, dashboard_url, token):
-        # Every trade is a BUY, so only layers that actually voted BUY (score > VOTE_MIN) are judged:
-        # rewarded on a win, penalised on a loss. Layers that were neutral/bearish are left alone
-        # (the old rule credited bearish layers on every loss, which let the worst layer take over).
+        # Symmetric update: BUY-voters rewarded on WIN / penalised on LOSS;
+        # SELL-voters (score < -VOTE_MIN) get the inverse — rewarded on LOSS, penalised on WIN.
+        # Neutral layers (|score| <= VOTE_MIN) are left unchanged to avoid noise.
         try:
             win = outcome == 'WIN'
             for layer in LAYERS:
-                if entry_scores.get(layer, 0) > VOTE_MIN:
-                    old_w = self.weights.get(layer, 0.2)
+                score = entry_scores.get(layer, 0)
+                old_w = self.weights.get(layer, 0.2)
+                if score > VOTE_MIN:
+                    # Layer voted BUY — correct on WIN, wrong on LOSS
                     self.weights[layer] = old_w * (1 + WEIGHT_LR) if win else old_w * (1 - WEIGHT_LR)
+                elif score < -VOTE_MIN:
+                    # Layer voted SELL — correct on LOSS, wrong on WIN; apply symmetric update
+                    self.weights[layer] = old_w * (1 - WEIGHT_LR) if win else old_w * (1 + WEIGHT_LR)
             self.weights = clamp_weights(self.weights)
         except Exception as e:
             log.warning(f"  Meta-learner update error: {e}")
