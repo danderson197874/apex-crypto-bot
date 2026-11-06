@@ -497,6 +497,12 @@ class ApexEngine:
                     self.positions = {s: p for s, p in data.get('positions', {}).items() if s in self.coins}
                     if self.positions:
                         log.info(f"  Restored {len(self.positions)} open positions: {', '.join(self.positions)}")
+                    # Restore daily_start only if saved on same UTC day — prevents stale baseline
+                    saved_date = data.get('daily_start_date', '')
+                    today = datetime.utcnow().strftime('%Y-%m-%d')
+                    if saved_date == today and data.get('daily_start', 0) > 0:
+                        self.daily_start = float(data['daily_start'])
+                        log.info(f"  Restored daily_start=${self.daily_start:,.2f} (same-day baseline)")
         except Exception as e:
             log.warning(f"  Could not restore positions: {e}")
 
@@ -504,8 +510,11 @@ class ApexEngine:
         try:
             os.makedirs(os.path.dirname(self.POSITIONS_FILE), exist_ok=True)
             tmp = self.POSITIONS_FILE + '.tmp'
+            # Persist daily_start + today's UTC date so global drawdown guard survives restarts
             with open(tmp, 'w') as f:
-                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE', 'positions': self.positions}, f, default=float)
+                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE', 'positions': self.positions,
+                           'daily_start': self.daily_start,
+                           'daily_start_date': datetime.utcnow().strftime('%Y-%m-%d')}, f, default=float)
             os.replace(tmp, self.POSITIONS_FILE)
         except Exception as e:
             log.warning(f"  Could not save positions: {e}")
