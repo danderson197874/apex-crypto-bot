@@ -1117,9 +1117,12 @@ class ApexEngine:
         log.info("=" * 65)
         log.info("APEX CRYPTO STRATEGIST v2 — ENGINE ONLINE")
         log.info(f"Coins: {len(self.coins)}  |  Mode: {'PAPER (DRY RUN)' if DRY_RUN else 'LIVE TRADING'}")
-        log.info(f"Layers: Momentum({self.meta.weights.get('momentum',0.40):.0%}) + "
-                 f"Arbitrage({self.meta.weights.get('arbitrage',0.25):.0%}) + "
-                 f"ML({self.meta.weights.get('ml',0.35):.0%})")
+        # Fixed: show all 5 signal layers with calibrated default weights (was showing 3-of-5 with wrong defaults)
+        log.info(f"Layers: Momentum({self.meta.weights.get('momentum',0.28):.0%}) "
+                 f"Arbitrage({self.meta.weights.get('arbitrage',0.15):.0%}) "
+                 f"ML({self.meta.weights.get('ml',0.24):.0%}) "
+                 f"Sentiment({self.meta.weights.get('sentiment',0.16):.0%}) "
+                 f"Orderflow({self.meta.weights.get('orderflow',0.17):.0%})")
         log.info(f"Entry: confirmed bottom only (RSI bounce + green candle + volume)")
         log.info(f"Breakers: {MAX_COIN_DRAWDOWN:.0%}/coin | {MAX_GLOBAL_DRAWDOWN:.0%} global | {LOSS_PAUSE_HOURS}h after 3 losses")
         log.info("=" * 65)
@@ -1143,7 +1146,8 @@ class ApexEngine:
                 if self.daily_start > 0:
                     loss = (self.daily_start - pv) / self.daily_start
                     if loss >= MAX_GLOBAL_DRAWDOWN:
-                        log.warning(f"GLOBAL HALT: down {loss:.1%} — waiting 1h")
+                        # Fixed: use CYCLE_SECS//60 so paper mode (15min) is accurate, not hardcoded 1h
+                        log.warning(f"GLOBAL HALT: down {loss:.1%} — waiting {CYCLE_SECS // 60}min")
                         time.sleep(CYCLE_SECS)
                         continue
 
