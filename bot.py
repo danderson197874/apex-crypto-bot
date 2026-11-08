@@ -497,6 +497,13 @@ class ApexEngine:
                     self.positions = {s: p for s, p in data.get('positions', {}).items() if s in self.coins}
                     if self.positions:
                         log.info(f"  Restored {len(self.positions)} open positions: {', '.join(self.positions)}")
+                    # Restore win_rate so cumulative stats survive restarts (bug: was in-memory only)
+                    saved_wr = data.get('win_rate', {})
+                    self.win_rate = {s: v for s, v in saved_wr.items() if s in self.coins}
+                    if self.win_rate:
+                        wins = sum(v['wins'] for v in self.win_rate.values())
+                        total = sum(v['total'] for v in self.win_rate.values())
+                        log.info(f"  Restored win rate: {wins}/{total}")
         except Exception as e:
             log.warning(f"  Could not restore positions: {e}")
 
@@ -505,7 +512,10 @@ class ApexEngine:
             os.makedirs(os.path.dirname(self.POSITIONS_FILE), exist_ok=True)
             tmp = self.POSITIONS_FILE + '.tmp'
             with open(tmp, 'w') as f:
-                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE', 'positions': self.positions}, f, default=float)
+                # Save win_rate alongside positions so cumulative stats survive restarts
+                json.dump({'mode': 'PAPER' if DRY_RUN else 'LIVE',
+                           'positions': self.positions,
+                           'win_rate': self.win_rate}, f, default=float)
             os.replace(tmp, self.POSITIONS_FILE)
         except Exception as e:
             log.warning(f"  Could not save positions: {e}")
