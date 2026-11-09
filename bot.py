@@ -1072,7 +1072,8 @@ class ApexEngine:
                 elif fused < EXIT_THRESHOLD:
                     reason = f"WAIT (bearish, fusion={fused:.2f} — not holding)"
 
-                reason = f"{reason}  [{r4}, {r5}]"
+                # Fix: include all 5 signal-layer scores+reasons (was only r4/r5) for complete observability
+                reason = f"{reason}  [mom={s1:+.2f}({r1}) arb={s2:+.2f}({r2}) ml={s3:+.2f}({r3}) | {r4} | {r5}]"
                 log.info(f"  {symbol:6s} {action or 'WAIT':8s} ${price:.6f}  RSI:{rsi_val:.0f}  |  {reason}")
 
                 if action == 'BUY':
