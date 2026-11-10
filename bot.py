@@ -604,8 +604,11 @@ class ApexEngine:
     @staticmethod
     def rsi(s, n=14):
         d = s.diff()
-        g = d.clip(lower=0).rolling(n).mean()
-        l = (-d.clip(upper=0)).rolling(n).mean()
+        # Fixed: use Wilder's EMA (alpha=1/n) — the standard RSI definition;
+        # SMA rolling(n).mean() was used before and diverges from the standard by up to 15 points,
+        # causing false overbought/oversold signals at the n-candle boundary.
+        g = d.clip(lower=0).ewm(alpha=1/n, adjust=False).mean()
+        l = (-d.clip(upper=0)).ewm(alpha=1/n, adjust=False).mean()
         return 100 - 100 / (1 + g / l.replace(0, 1e-9))
 
     @staticmethod
