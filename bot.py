@@ -620,7 +620,9 @@ class ApexEngine:
     @staticmethod
     def bollinger(s, n=20, k=2):
         sma = s.rolling(n).mean()
-        std = s.rolling(n).std()
+        # Fix: use ddof=0 (population std dev) — standard Bollinger Band definition;
+        # pandas default ddof=1 (Bessel's correction) makes bands ~2.5% wider, under-triggering bb_lower signals
+        std = s.rolling(n).std(ddof=0)
         upper = sma + k * std
         lower = sma - k * std
         return upper, lower, sma
