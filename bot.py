@@ -729,10 +729,11 @@ class ApexEngine:
                 min_len = min(len(df), len(partner_df))
                 my_close = df['close'].iloc[-min_len:].values
                 p_close = partner_df['close'].iloc[-min_len:].values
-                # Log price ratio
+                # Log price ratio; use historical-only mean+std to avoid in-sample bias
                 ratio = np.log(my_close / np.maximum(p_close, 1e-12))
-                mean_r = np.mean(ratio)
-                std_r = np.std(ratio)
+                historical = ratio[:-1]  # exclude current obs so z-score is out-of-sample
+                mean_r = np.mean(historical)
+                std_r = np.std(historical, ddof=1)  # sample std (ddof=1) for small n
                 if std_r < 1e-9:
                     continue
                 z = (ratio[-1] - mean_r) / std_r
