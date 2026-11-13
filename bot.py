@@ -919,8 +919,10 @@ class ApexEngine:
         if coin_loss >= MAX_COIN_DRAWDOWN:
             log.warning(f"  {symbol} 5% drawdown breaker — exiting")
             self.place_order(cfg['pair'], 'SELL', value)
-            self.paused[symbol] = datetime.utcnow() + timedelta(hours=24)
+            # Fix: call record() BEFORE setting 24h pause — record() may set a shorter
+            # LOSS_PAUSE_HOURS pause (1-3h) on 3-loss streak; 24h must always win for drawdown.
             self.record(symbol, False)
+            self.paused[symbol] = datetime.utcnow() + timedelta(hours=24)
             sell_reason = 'drawdown_breaker'
             outcome = 'LOSS'
         elif price <= pos['stop']:
