@@ -634,7 +634,8 @@ class ApexEngine:
         r = self.rsi(df['close'])
         rsi_ok = r.iloc[-3] <= 35 and r.iloc[-1] > r.iloc[-2]
         green = df['close'].iloc[-1] > df['open'].iloc[-1]
-        avg_vol = df['volume'].iloc[-20:-1].mean()
+        # Fixed: use iloc[-21:-1] for exactly 20 prior candles (iloc[-20:-1] gave only 19)
+        avg_vol = df['volume'].iloc[-21:-1].mean()
         vol_ok = df['volume'].iloc[-1] > avg_vol * 1.2
         return near_bot and rsi_ok and green and vol_ok
 
@@ -658,8 +659,9 @@ class ApexEngine:
         above50 = close.iloc[-1] > e50.iloc[-1]
         rsi_now, rsi_prev = r.iloc[-1], r.iloc[-2]
         rsi_bounce = r.iloc[-3] <= 35 and rsi_now > rsi_prev
-        vol = df['volume'].iloc[-1] > df['volume'].iloc[-20:-1].mean() * 1.5
-        mom = close.iloc[-1] > df['high'].iloc[-20:-1].max() * 1.02
+        # Fixed: use iloc[-21:-1] for exactly 20 prior candles (iloc[-20:-1] gave only 19)
+        vol = df['volume'].iloc[-1] > df['volume'].iloc[-21:-1].mean() * 1.5
+        mom = close.iloc[-1] > df['high'].iloc[-21:-1].max() * 1.02
 
         # 1) Full-confirmation setups (original strict patterns) score highest.
         score, reason = 0.0, ''
