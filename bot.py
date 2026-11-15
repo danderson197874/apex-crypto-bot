@@ -1140,7 +1140,8 @@ class ApexEngine:
                     self.daily_start = pv
                     log.info(f"Baseline set: ${pv:,.2f}")
 
-                if self.daily_start > 0:
+                # Skip drawdown check when pv==0 (API failure): 0.0 gives false 100% loss
+                if self.daily_start > 0 and pv > 0:
                     loss = (self.daily_start - pv) / self.daily_start
                     if loss >= MAX_GLOBAL_DRAWDOWN:
                         log.warning(f"GLOBAL HALT: down {loss:.1%} — waiting 1h")
