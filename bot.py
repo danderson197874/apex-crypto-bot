@@ -531,14 +531,21 @@ class ApexEngine:
                 if cur in ('USDC', 'USD'):
                     total += bal
                 else:
-                    try:
-                        book = self.client.get_best_bid_ask(product_ids=[f"{cur}-USDC"])
-                        pbs = sdk_get(book, 'pricebooks', [])
-                        bids = sdk_get(pbs[0], 'bids', []) if pbs else []
-                        price = float(sdk_get(bids[0], 'price', 0)) if bids else 0.0
-                        total += bal * price
-                    except Exception:
-                        pass
+                    # Fix: try USDC pair first, then USD — coins may be configured as {cur}-USD
+                    # if no USDC pair exists; always using USDC silently valued them at $0
+                    priced = False
+                    for quote in ['USDC', 'USD']:
+                        try:
+                            book = self.client.get_best_bid_ask(product_ids=[f"{cur}-{quote}"])
+                            pbs = sdk_get(book, 'pricebooks', [])
+                            bids = sdk_get(pbs[0], 'bids', []) if pbs else []
+                            if bids:
+                                price = float(sdk_get(bids[0], 'price', 0))
+                                total += bal * price
+                                priced = True
+                                break
+                        except Exception:
+                            continue
             self.consecutive_api_failures = 0
             return total
         except Exception as e:
