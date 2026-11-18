@@ -1128,9 +1128,14 @@ class ApexEngine:
         while True:
             try:
                 if datetime.utcnow().date() != last_reset:
-                    self.daily_start = self.portfolio_value()
+                    # guard: skip midnight reset if API returned 0 — zeroing daily_start disables drawdown protection all day
+                    _new_start = self.portfolio_value()
+                    if _new_start > 0:
+                        self.daily_start = _new_start
+                        log.info(f"Day reset  |  Baseline: ${self.daily_start:,.2f}")
+                    else:
+                        log.warning("Day reset skipped — portfolio_value()=0 (API failure); keeping prior baseline")
                     last_reset = datetime.utcnow().date()
-                    log.info(f"Day reset  |  Baseline: ${self.daily_start:,.2f}")
 
                 pv = self.portfolio_value()
                 if pv == 0.0 and self.consecutive_api_failures >= 2:
