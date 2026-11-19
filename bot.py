@@ -562,6 +562,10 @@ class ApexEngine:
                 df = pd.DataFrame(c)
                 for col in ('close', 'high', 'low', 'open', 'volume', 'start'):
                     df[col] = pd.to_numeric(df[col], errors='coerce')
+                # Drop rows with NaN close to prevent NaN price propagating through all signal layers
+                df = df.dropna(subset=['close'])
+                if df.empty:
+                    return None
                 return df.sort_values('start').reset_index(drop=True)
             except Exception:
                 if attempt == retries:
@@ -592,6 +596,10 @@ class ApexEngine:
             df = pd.concat(frames, ignore_index=True)
             for col in ('close', 'high', 'low', 'open', 'volume', 'start'):
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+            # Drop NaN close rows so ML training data and signal calculations never receive NaN prices
+            df = df.dropna(subset=['close'])
+            if df.empty:
+                return None
             return df.drop_duplicates('start').sort_values('start').reset_index(drop=True)
         except Exception as e:
             log.warning(f"  history fetch failed for {pair}: {e}")
