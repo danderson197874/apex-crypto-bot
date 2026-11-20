@@ -1143,7 +1143,18 @@ class ApexEngine:
                 if self.daily_start > 0:
                     loss = (self.daily_start - pv) / self.daily_start
                     if loss >= MAX_GLOBAL_DRAWDOWN:
-                        log.warning(f"GLOBAL HALT: down {loss:.1%} — waiting 1h")
+                        log.warning(f"GLOBAL HALT: down {loss:.1%} — closing open positions and waiting 1h")
+                        # Fix: during GLOBAL HALT the bot skips run_cycle(), so check_position() never fires;
+                        # close all open positions now using last known price to enforce per-coin stop-loss.
+                        for sym in list(self.positions.keys()):
+                            pos = self.positions.pop(sym)
+                            price = self.last_price.get(sym, pos['entry'])
+                            cfg = self.coins.get(sym)
+                            if cfg and price > 0:
+                                value = pos['size'] * price / max(pos['entry'], 1e-12)
+                                self.place_order(cfg['pair'], 'SELL', value)
+                                self.record(sym, price > pos['entry'])
+                        self._save_positions()
                         time.sleep(CYCLE_SECS)
                         continue
 
