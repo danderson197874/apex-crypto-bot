@@ -918,34 +918,44 @@ class ApexEngine:
 
         if coin_loss >= MAX_COIN_DRAWDOWN:
             log.warning(f"  {symbol} 5% drawdown breaker — exiting")
-            self.place_order(cfg['pair'], 'SELL', value)
+            # Fix: guard record() and position deletion on failed SELL — avoids false loss count / false pause
+            placed = self.place_order(cfg['pair'], 'SELL', value)
             self.paused[symbol] = datetime.utcnow() + timedelta(hours=24)
-            self.record(symbol, False)
+            if placed:
+                self.record(symbol, False)
             sell_reason = 'drawdown_breaker'
-            outcome = 'LOSS'
+            outcome = 'LOSS' if placed else None
         elif price <= pos['stop']:
             log.warning(f"  STOP HIT: {symbol} | {pnl:.2%}")
-            self.place_order(cfg['pair'], 'SELL', value)
-            self.record(symbol, False)
+            # Fix: guard record() and position deletion on failed SELL — avoids false loss count / false pause
+            placed = self.place_order(cfg['pair'], 'SELL', value)
+            if placed:
+                self.record(symbol, False)
             sell_reason = 'stop_hit'
-            outcome = 'LOSS'
+            outcome = 'LOSS' if placed else None
         elif price >= pos['target']:
             log.info(f"  TARGET HIT: {symbol} | {pnl:.2%}")
-            self.place_order(cfg['pair'], 'SELL', value)
-            self.record(symbol, True)
+            # Fix: guard record() and position deletion on failed SELL — avoids false win count / ghost position
+            placed = self.place_order(cfg['pair'], 'SELL', value)
+            if placed:
+                self.record(symbol, True)
             sell_reason = 'target_hit'
-            outcome = 'WIN'
+            outcome = 'WIN' if placed else None
         elif fused is not None and fused <= EXIT_THRESHOLD and held_h >= MIN_HOLD_HOURS:
             log.info(f"  SIGNAL EXIT: {symbol} | fusion={fused:.2f} | {pnl:.2%}")
-            self.place_order(cfg['pair'], 'SELL', value)
-            outcome = 'WIN' if pnl > 0 else 'LOSS'
-            self.record(symbol, outcome == 'WIN')
+            # Fix: guard record() and position deletion on failed SELL — avoids false win/loss count
+            placed = self.place_order(cfg['pair'], 'SELL', value)
+            outcome = ('WIN' if pnl > 0 else 'LOSS') if placed else None
+            if placed:
+                self.record(symbol, outcome == 'WIN')
             sell_reason = 'signal_exit'
         elif held_h >= MAX_HOLD_HOURS:
             log.info(f"  TIME EXIT: {symbol} held {held_h:.1f}h | {pnl:.2%}")
-            self.place_order(cfg['pair'], 'SELL', value)
-            outcome = 'WIN' if pnl > 0 else 'LOSS'
-            self.record(symbol, outcome == 'WIN')
+            # Fix: guard record() and position deletion on failed SELL — avoids false win/loss count
+            placed = self.place_order(cfg['pair'], 'SELL', value)
+            outcome = ('WIN' if pnl > 0 else 'LOSS') if placed else None
+            if placed:
+                self.record(symbol, outcome == 'WIN')
             sell_reason = 'time_exit'
 
         if outcome:
